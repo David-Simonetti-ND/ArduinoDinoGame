@@ -20,6 +20,14 @@ volatile long unsigned int jump_start = 0; // time when jump began
 volatile int dino_state = RUNNING; // store state of dino
 volatile int num_lives = 3; // store how many lives left
 
+char game_over_message_buffer[81]; // holds scrolling message after game ends
+int max_characters = 80; // max characters in the game over message
+int num_cactus_jumped = 0; // keep track of how many cacti the dino manages to jump over
+int num_birds_ducked = 0; // keep track of how many birds the dino manages to duck under
+int tiles_ran = 0; // how many tiles total the dinosaur ran
+double score = 0.0; // keep track of the current score
+double score_mult = 1.0; // and the score multiplier (depends on difficulty)
+
 // byte arrays to make dinosaur and cactus and bird sprites
 byte dinosaur[8] = {
   B00111,
@@ -78,14 +86,47 @@ void initScreen()
   }
 }
 
+void printGameOverOffset(int offset) // take in an offset and prints 16 characters from the game over buffer to the screen
+{
+  lcd.setCursor(0, 1);
+  for (int i = 0; i < 16; i++)
+  {
+     lcd.print(game_over_message_buffer[offset]);
+     offset++;
+     if (offset >= max_characters) // if we reach the end of the buffer, loop over the end
+     {
+      offset = 0;
+     }
+  }
+}
+
 void gameOver()
 {
   displayLives(); // clear out lives
   lcd.clear();
   lcd.write("Game over!"); // display end game messages
-  lcd.setCursor(0, 1);
-  lcd.write("Press reset");
-  while(1); // force reset to be pressed by busy waiting
+  char temp_score[20], temp_tiles[20], temp_cacti[20], temp_bird[20]; // temporary strings to store each screen of the end of game message
+  sprintf(temp_score, "score: %-8u", (unsigned long int)score); // create score string
+  sprintf(temp_tiles, "Tiles Ran: %-8d", tiles_ran); // create tile string
+  sprintf(temp_cacti, "Cacti Jumped: %-5d", num_cactus_jumped); // create cactus string
+  sprintf(temp_bird, "Birds ducked: %-4d", num_birds_ducked); // create bird string
+  // create game over message buffer from individual screens by concatenating them all together
+  strcat(game_over_message_buffer, temp_score);
+  strcat(game_over_message_buffer, temp_tiles);
+  strcat(game_over_message_buffer, temp_cacti);
+  strcat(game_over_message_buffer, temp_bird);
+  max_characters = strlen(game_over_message_buffer); // find how many characters there are to print
+  int offset = 0;
+  while(1) // force reset to be pressed by busy waiting
+  {
+    printGameOverOffset(offset); // print offset
+    delay(200); // wait a bit
+    offset++; // 
+    if (offset >= max_characters) // reset score if we loop over
+    {
+      offset = 0;
+    }
+  }
 }
 
 void updateScreen()
@@ -107,6 +148,10 @@ void updateScreen()
         gameOver();
       }
     }
+    if (screen[1] == BIRD)
+    {
+      num_birds_ducked++;
+    }
   }
   else if (dino_state == JUMPING) // set dino location for when we are jumping
   {
@@ -119,6 +164,10 @@ void updateScreen()
       {
         gameOver();
       }
+    }
+    if (screen[17] == CACTUS)
+    {
+      num_cactus_jumped++;
     }
   }
   for (int i = 0; i < WIDTH * HEIGHT; i++) // loop through and update the entire screen
@@ -147,6 +196,9 @@ void updateScreen()
     default: // add no new obstacle to the screen
       break;
   }
+
+  tiles_ran++;
+  score += 10.0 * score_mult;
   lcd.clear();
 }
 
@@ -191,6 +243,7 @@ void loop() {
   potVal = analogRead(SPEEDPOT); // get speedpot value
   displayLives(); // show how many lives are left
   delay(map(potVal, 0, 1023, 200, 800)); // wait a time based on the value of the speedpot
+  score_mult += map(potVal, 0, 1023, 10, 0) / 100.0; // update score multiplier as a reward for playing at a faster speed
   updateScreen(); // update the game
 
 }
